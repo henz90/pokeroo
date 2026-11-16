@@ -1,2 +1,2 @@
-# SOLATRO
-Inspired by TechDweeb
+# Pokeroo
+Solo Poker Survival 
