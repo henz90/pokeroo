@@ -135,6 +135,11 @@ h3{margin:18px 0 6px;font-size:22px}
 .mini.jokercard svg{width:26px;height:26px}
 .mini.dim{opacity:.3;filter:grayscale(.7)}
 .pvname{margin-top:6px;font-size:16px;font-weight:700;color:var(--accent)}
+.hsform{display:flex;flex-direction:column;align-items:center;gap:10px;margin:16px 0}
+.initials{font-size:28px;letter-spacing:8px;text-align:center;width:160px;padding:8px;font-weight:900;text-transform:uppercase;background:#0b3d25;color:var(--accent);border:2px solid var(--accent);border-radius:10px;font-family:monospace}
+table.hs td{padding:6px 4px}
+table.hs tr.on td{background:var(--accent);color:#222;font-weight:700}
+.hsname{font-family:monospace;font-weight:800;letter-spacing:2px}
 .pilegrid{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:10px 0}
 .pilegrid .mini{width:52px;height:72px}
 .pilegrid .mini .mr{font-size:20px}
@@ -177,7 +182,7 @@ td{padding:5px 2px;border-bottom:1px solid var(--line)}
 </style>
 </head>
 <body>
-<div class="head"><div><h1>Pokeroo</h1><div class="muted">Solo poker survival.</div></div><div class="hdrbtns"><button id="soundBtn" class="btn ghost iconbtn" onclick="toggleSound()"></button><div class="menu"><button class="btn ghost" onclick="toggleMenu()">☰ Menu</button><div class="menuList" id="menuList"><button onclick="menuDo(openTutorial)">House Rules</button><button onclick="menuDo(restart)">New Round</button></div></div></div></div>
+<div class="head"><div><h1>Pokeroo</h1><div class="muted">Solo poker survival.</div></div><div class="hdrbtns"><button id="soundBtn" class="btn ghost iconbtn" onclick="toggleSound()"></button><div class="menu"><button class="btn ghost" onclick="toggleMenu()">☰ Menu</button><div class="menuList" id="menuList"><button onclick="menuDo(openTutorial)">House Rules</button><button onclick="menuDo(openScores)">High Scores</button><button onclick="menuDo(restart)">New Round</button></div></div></div></div>
 <div id="tutorial"></div>
 <div class="wrap">
   <main class="panel" id="main"></main>
@@ -261,8 +266,8 @@ function fresh(){
     plays: 3, discards: 3, limit: 8, score: 0,
     doubleOn: false, used: [], selected: [], useJoker: false,
     phase: 'play', msg: '', sort: 'rank', flash: null,
-    lastResult: null, sound: true, cart: {},
-    stats: {bestHand: null, bestPlay: 0, handsPlayed: 0, bought: []}
+    lastResult: null, sound: true, cart: {}, scoreSaved: false,
+    stats: {bestHand: null, bestPlay: 0, handsPlayed: 0, bought: [], totalPts: 0}
   };
 }
 let S = fresh();
@@ -422,6 +427,7 @@ function startRound(){
   S.discards = has('discard') ? 4 : 3;
   S.limit = has('card') ? 9 : 8;
   S.score = 25 * count('pocket');
+  S.stats.totalPts += S.score;
   S.doubleOn = false;
   S.used = [];
   S.selected = [];
@@ -483,6 +489,7 @@ function playHand(){
 
   const prev = S.score;
   S.score += total;
+  S.stats.totalPts += total;
   S.plays--;
   S.stats.handsPlayed++;
   if (total > S.stats.bestPlay){ S.stats.bestPlay = total; S.stats.bestHand = play.name; }
@@ -598,6 +605,7 @@ function loadRun(){
     st.owned = (st.owned || []).filter(known);
     st.cart = Object.fromEntries(Object.entries(st.cart || {}).filter(([k]) => known(k)));
     st.stats = st.stats || {bestHand: null, bestPlay: 0, handsPlayed: 0, bought: []};
+    st.stats.totalPts = st.stats.totalPts || 0;
     st.stats.bought = (st.stats.bought || []).map(n => {
       const legacy = {'Pocket Points': 'pocket', 'Double Score': 'double', 'Double V': 'double'};
       const it = ITEMS.find(i => i.key === n || i.name === n || i.key === legacy[n]);
@@ -805,7 +813,7 @@ function overHTML(){
   st.bought.forEach(k => counts[k] = (counts[k] || 0) + 1);
   const handKey = Object.keys(HAND).find(k => HAND[k] === st.bestHand);
   const bestCell = st.bestHand
-    ? `<span class="htip tipleft">${st.bestHand}<span class="tipbox"><span class="tipdesc">${HAND_TIP[handKey]}</span><span class="tipcards">${tipCardsHTML(Number(handKey))}</span></span></span> (${st.bestPlay} pts)`
+    ? `<span class="htip tipleft">${st.bestHand}<span class="tipbox"><span class="tipdesc">${HAND_TIP[handKey]}</span><span class="tipcards">${tipCardsHTML(Number(handKey))}</span></span></span> (${st.bestPlay}${PVS})`
     : '—';
   const boughtRows = Object.keys(counts).length
     ? Object.entries(counts).map(([key, k]) => {
@@ -814,16 +822,21 @@ function overHTML(){
         return `<tr><td><span class="tok" data-tip="${it.tip}">${it.name}</span></td><td style="text-align:right">×${k}</td></tr>`;
       }).join('')
     : '<tr><td colspan="2">None</td></tr>';
+  const entry = needsEntry();
   return `
     <h2>Busted</h2>
     <p>You fell short in round ${S.round}: ${S.score}${PVS}/${targetFor(S.round)}${PVS}.</p>
     <table class="sum">
       <tr><td>Rounds survived</td><td style="text-align:right"><b>${S.survived}</b></td></tr>
+      <tr><td>Total points</td><td style="text-align:right"><b>${st.totalPts}${PVS}</b></td></tr>
       <tr><td>Best hand</td><td style="text-align:right">${bestCell}</td></tr>
       <tr><td>Hands played</td><td style="text-align:right">${st.handsPlayed}</td></tr>
       <tr><td colspan="2" class="muted" style="padding-top:12px">Bonuses bought (times purchased)</td></tr>
       ${boughtRows}
     </table>
+    ${entry ? `<div class="hsform"><div class="muted">New high score! Enter 3 characters for your name.</div><input id="initials" class="initials" maxlength="3" autocomplete="off" placeholder="AAA" oninput="hsInput(this)"><button id="savebtn" class="btn" disabled onclick="saveScore()">Save</button></div>` : ''}
+    <h3>High Scores</h3>
+    ${scoresTable()}
     <div class="row"><button class="btn" onclick="restart()">Play again</button></div>`;
 }
 
@@ -896,6 +909,7 @@ function render(){
   let modal = '';
   if (S.phase === 'shop') modal = shopHTML();
   else if (S.phase === 'over') modal = overHTML();
+  else if (SHOW_SCORES) modal = scoresModalHTML();
   else if (S.pileView) modal = pileHTML();
 
   let ov = document.getElementById('overlay');
@@ -917,6 +931,85 @@ function render(){
   const sb = document.getElementById('soundBtn');
   if (sb){ sb.innerHTML = soundIcon(S.sound); sb.title = S.sound ? 'Sound on' : 'Sound muted'; sb.setAttribute('aria-label', sb.title); }
   saveRun();
+}
+
+// ---------- High scores ----------
+const HS_KEY = 'pokeroo-highscores';
+let SHOW_SCORES = false;
+let HL_SCORE = -1;
+const SB_URL = 'https://xrwhaqfjykldvhekkzxe.supabase.co';
+const SB_KEY = 'sb_publishable_inQgugLkWaG3kHOBDcIdHg_dC7hw_pq';
+const SB_HEADERS = { apikey: SB_KEY, 'Content-Type': 'application/json' };
+let SCORES = [];            // cached top 10, from Supabase when reachable
+let SCORES_ONLINE = null;   // null = not checked yet, false = using this device's scores
+function loadLocalScores(){
+  try{ return JSON.parse(localStorage.getItem(HS_KEY)) || []; }catch(e){ return []; }
+}
+function loadScores(){ return SCORES; }
+async function refreshScores(){
+  try{
+    const r = await fetch(`${SB_URL}/rest/v1/highscores?select=name,round,pts&order=round.desc,pts.desc&limit=10`, { headers: SB_HEADERS });
+    if (!r.ok) throw new Error(String(r.status));
+    SCORES = await r.json();
+    SCORES_ONLINE = true;
+  }catch(e){
+    SCORES = loadLocalScores();
+    SCORES_ONLINE = false;
+  }
+  render();
+}
+function storeScores(list){
+  try{ localStorage.setItem(HS_KEY, JSON.stringify(list)); }catch(e){}
+}
+function beatsScore(list, round, pts){
+  if (list.length < 10) return true;
+  const last = list[list.length - 1];
+  return round > last.round || (round === last.round && pts > last.pts);
+}
+function needsEntry(){
+  return S.phase === 'over' && !S.scoreSaved && beatsScore(loadScores(), S.round, S.stats.totalPts);
+}
+function hsInput(el){
+  el.value = el.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3);
+  const b = document.getElementById('savebtn');
+  if (b) b.disabled = el.value.length < 3;
+}
+async function saveScore(){
+  const inp = document.getElementById('initials');
+  const name = (inp ? inp.value : '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3);
+  if (name.length < 3 || S.scoreSaved) return;
+  S.scoreSaved = true;
+  const pts = S.stats.totalPts;
+  const entry = {name, round: S.round, pts};
+  let ok = false;
+  try{
+    const r = await fetch(`${SB_URL}/rest/v1/highscores`, {
+      method: 'POST', headers: { ...SB_HEADERS, Prefer: 'return=minimal' }, body: JSON.stringify(entry)
+    });
+    ok = r.ok;
+  }catch(e){ ok = false; }
+  if (!ok){
+    const list = loadLocalScores();
+    list.push(entry);
+    list.sort((a, b) => b.round - a.round || b.pts - a.pts);
+    storeScores(list.slice(0, 10));
+  }
+  await refreshScores();
+  HL_SCORE = SCORES.findIndex(e => e.name === name && e.round === S.round && e.pts === pts);
+  render();
+}
+function openScores(){ SHOW_SCORES = true; render(); refreshScores(); }
+function closeScores(){ SHOW_SCORES = false; HL_SCORE = -1; render(); }
+function scoresTable(){
+  const list = loadScores();
+  if (SCORES_ONLINE === null) return '<p class="muted">Loading scores…</p>';
+  if (!list.length) return '<p class="muted">No high scores yet.</p>';
+  const rows = list.map((e, i) => `<tr class="${i === HL_SCORE ? 'on' : ''}"><td>${i + 1}</td><td class="hsname">${e.name}</td><td>${e.round}</td><td>${e.pts}${PVS}</td></tr>`).join('');
+  const note = SCORES_ONLINE === false ? '<p class="muted">Offline: showing scores saved on this device.</p>' : '';
+  return `${note}<table class="hs"><tr><td>#</td><td>Name</td><td>Round</td><td>Points</td></tr>${rows}</table>`;
+}
+function scoresModalHTML(){
+  return `<h2>High Scores</h2>${scoresTable()}<div class="row"><button class="btn" onclick="closeScores()">Close</button></div>`;
 }
 
 // ---------- Menu ----------
@@ -988,6 +1081,7 @@ if (!loadRun()){
   startRound();
 }
 render();
+refreshScores();
 if (!tutSeen()) openTutorial();
 </script>
 </body>
